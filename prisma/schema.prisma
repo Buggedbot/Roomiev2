@@ -1,0 +1,170 @@
+// RoomieMatch database schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  NON_BINARY
+  OTHER
+}
+
+enum GenderPreference {
+  MALE
+  FEMALE
+  ANY
+}
+
+enum FoodPreference {
+  VEG
+  NON_VEG
+  VEGAN
+  EGGETARIAN
+}
+
+enum HabitLevel {
+  NEVER
+  SOMETIMES
+  REGULARLY
+}
+
+enum SleepSchedule {
+  EARLY_BIRD
+  NIGHT_OWL
+  FLEXIBLE
+}
+
+enum Cleanliness {
+  RELAXED
+  MODERATE
+  VERY_CLEAN
+}
+
+enum StudyHabits {
+  QUIET
+  MODERATE
+  SOCIAL
+}
+
+enum SwipeAction {
+  LIKE
+  SUPER_LIKE
+  PASS
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  emailVerified Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile         Profile?
+  photos          Photo[]
+  sentLikes       Like[]        @relation("LikesGiven")
+  receivedLikes   Like[]        @relation("LikesReceived")
+  matchesAsUserA  Match[]       @relation("MatchUserA")
+  matchesAsUserB  Match[]       @relation("MatchUserB")
+  messages        Message[]
+
+  @@map("users")
+}
+
+model Profile {
+  id               String            @id @default(cuid())
+  userId           String            @unique
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name             String
+  bio              String            @default("")
+  age              Int
+  gender           Gender
+  genderPreference GenderPreference  @default(ANY)
+
+  college          String
+  course           String?
+  year             Int?
+
+  city             String
+  preferredArea    String?
+  budgetMin        Int
+  budgetMax        Int
+
+  languages        String[]          @default([])
+  foodPreference   FoodPreference
+  smoking          HabitLevel        @default(NEVER)
+  drinking         HabitLevel        @default(NEVER)
+  sleepSchedule    SleepSchedule
+  cleanliness      Cleanliness
+  pets             Boolean           @default(false)
+  studyHabits      StudyHabits       @default(MODERATE)
+  interests        String[]          @default([])
+
+  moveInDate       DateTime?
+  verified         Boolean           @default(false)
+
+  isComplete       Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@map("profiles")
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url       String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("photos")
+}
+
+model Like {
+  id         String      @id @default(cuid())
+  fromUserId String
+  fromUser   User        @relation("LikesGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId   String
+  toUser     User        @relation("LikesReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  action     SwipeAction
+  createdAt  DateTime    @default(now())
+
+  @@unique([fromUserId, toUserId])
+  @@map("likes")
+}
+
+model Match {
+  id         String    @id @default(cuid())
+  userAId    String
+  userA      User      @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId    String
+  userB      User      @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  messages   Message[]
+
+  @@unique([userAId, userBId])
+  @@map("matches")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([matchId, createdAt])
+  @@map("messages")
+}
