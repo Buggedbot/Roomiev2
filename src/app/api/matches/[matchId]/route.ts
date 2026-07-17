@@ -15,8 +15,8 @@ export async function GET(
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: {
-      userA: { include: { profile: true } },
-      userB: { include: { profile: true } },
+      userA: { include: { profile: true, photos: { orderBy: { position: "asc" }, take: 1 } } },
+      userB: { include: { profile: true, photos: { orderBy: { position: "asc" }, take: 1 } } },
     },
   });
 
@@ -32,6 +32,7 @@ export async function GET(
       id: other.id,
       name: other.profile?.name ?? "Unknown",
       college: other.profile?.college ?? "",
+      photoUrl: other.photos[0]?.url ?? null,
     },
   });
 }

@@ -12,8 +12,8 @@ export async function GET() {
     where: { OR: [{ userAId: userId }, { userBId: userId }] },
     orderBy: { createdAt: "desc" },
     include: {
-      userA: { include: { profile: true } },
-      userB: { include: { profile: true } },
+      userA: { include: { profile: true, photos: { orderBy: { position: "asc" }, take: 1 } } },
+      userB: { include: { profile: true, photos: { orderBy: { position: "asc" }, take: 1 } } },
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
@@ -26,6 +26,7 @@ export async function GET() {
       otherUser: {
         id: other.id,
         name: other.profile?.name ?? "Unknown",
+        photoUrl: other.photos[0]?.url ?? null,
       },
       lastMessage: m.messages[0]
         ? { content: m.messages[0].content, createdAt: m.messages[0].createdAt }

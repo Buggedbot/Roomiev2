@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button, Input } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
 
 type Message = {
   id: string;
@@ -15,7 +16,7 @@ export default function ChatPage() {
   const params = useParams<{ matchId: string }>();
   const matchId = params.matchId;
 
-  const [otherName, setOtherName] = useState<string | null>(null);
+  const [otherUser, setOtherUser] = useState<{ name: string; photoUrl: string | null } | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
@@ -31,7 +32,12 @@ export default function ChatPage() {
   useEffect(() => {
     fetch(`/api/matches/${matchId}`)
       .then((res) => res.json())
-      .then((data) => setOtherName(data.otherUser?.name ?? "Roomie"));
+      .then((data) =>
+        setOtherUser({
+          name: data.otherUser?.name ?? "Roomie",
+          photoUrl: data.otherUser?.photoUrl ?? null,
+        })
+      );
   }, [matchId]);
 
   useEffect(() => {
@@ -77,8 +83,13 @@ export default function ChatPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 py-6">
-      <div className="border-b border-border pb-3">
-        <h1 className="text-lg font-semibold">{otherName ?? "…"}</h1>
+      <div className="flex items-center gap-3 border-b border-border pb-3">
+        <Avatar
+          name={otherUser?.name ?? "?"}
+          photoUrl={otherUser?.photoUrl}
+          className="h-9 w-9 text-sm"
+        />
+        <h1 className="text-lg font-semibold">{otherUser?.name ?? "…"}</h1>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto py-4">

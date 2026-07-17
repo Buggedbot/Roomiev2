@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, Card } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
 
 type CompatibilityFactor = {
   factor: string;
@@ -24,6 +25,7 @@ type Candidate = {
   budgetMax: number;
   interests: string[];
   verified: boolean;
+  photoUrl: string | null;
   compatibilityScore: number;
   compatibilityBreakdown: CompatibilityFactor[];
 };
@@ -111,11 +113,15 @@ export default function DiscoverPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 py-8">
       <Card className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20 py-10">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary text-3xl font-bold text-primary-foreground">
-            {current.name.charAt(0).toUpperCase()}
+        {current.photoUrl ? (
+          <div className="aspect-[4/3] w-full overflow-hidden bg-foreground/5">
+            <Avatar name={current.name} photoUrl={current.photoUrl} className="h-full w-full" />
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20 py-10">
+            <Avatar name={current.name} className="h-24 w-24 text-3xl" />
+          </div>
+        )}
 
         <div className="flex-1 space-y-4 p-6">
           <div className="flex items-start justify-between">

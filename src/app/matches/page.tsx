@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
 import { formatDistanceToNow } from "date-fns";
 
 type MatchSummary = {
   matchId: string;
   createdAt: string;
-  otherUser: { id: string; name: string };
+  otherUser: { id: string; name: string; photoUrl: string | null };
   lastMessage: { content: string; createdAt: string } | null;
 };
 
@@ -41,9 +42,11 @@ export default function MatchesPage() {
         {matches?.map((m) => (
           <Link key={m.matchId} href={`/matches/${m.matchId}`}>
             <Card className="flex items-center gap-4 p-4 transition hover:border-primary/40">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
-                {m.otherUser.name.charAt(0).toUpperCase()}
-              </div>
+              <Avatar
+                name={m.otherUser.name}
+                photoUrl={m.otherUser.photoUrl}
+                className="h-12 w-12 shrink-0 text-lg"
+              />
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{m.otherUser.name}</p>
                 <p className="truncate text-sm text-muted">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ErrorText, Input, Label, Select, Textarea } from "@/components/ui";
+import { PhotoUploader } from "@/components/photo-uploader";
 
 type FormState = {
   name: string;
@@ -147,6 +148,11 @@ export default function ProfileSetupPage() {
       <p className="mt-1 text-sm text-muted">
         This is what we use to find your most compatible roommates.
       </p>
+
+      <Card className="mt-8 space-y-4 p-6">
+        <h2 className="font-semibold">Photos</h2>
+        <PhotoUploader />
+      </Card>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-8">
         <Card className="space-y-4 p-6">

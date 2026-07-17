@@ -4,10 +4,10 @@ Find your perfect roommate, not just a room. Students create a profile,
 swipe on compatible roommates, and chat once they match.
 
 This is a working vertical slice of the larger RoomieMatch product spec:
-auth, profile creation, an explainable rule-based compatibility engine,
-swiping, matching, and text chat — all wired end-to-end. Photo uploads,
-GPS/maps, phone OTP, AI features, and an admin dashboard are intentionally
-out of scope for now; see "What's not built yet" below.
+auth, profile creation, photo upload, an explainable rule-based
+compatibility engine, swiping, matching, and text chat — all wired
+end-to-end. GPS/maps, phone OTP, AI features, and an admin dashboard are
+intentionally out of scope for now; see "What's not built yet" below.
 
 ## Tech stack
 
@@ -15,6 +15,8 @@ out of scope for now; see "What's not built yet" below.
 - Prisma ORM + PostgreSQL (via `@prisma/adapter-pg`)
 - Auth: email/password, JWT session cookie (`jose`), `bcryptjs` hashing
 - Validation: Zod
+- Photo storage: Vercel Blob (`@vercel/blob`) — requires `BLOB_READ_WRITE_TOKEN`
+  in production (enable Blob storage in the Vercel project's Storage tab)
 
 ## Getting started
 
@@ -63,7 +65,6 @@ filters applied before scoring, not part of the score itself.
 Cut from this slice to keep it demoable and correct rather than broad and
 shallow — worth adding as the product grows:
 
-- Photo upload (Cloudinary/S3) — profiles currently show initials
 - Real-time chat (currently polls every 3s instead of WebSockets)
 - Phone OTP, Google OAuth (only email/password today)
 - Government/Student ID verification

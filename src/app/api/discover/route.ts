@@ -27,6 +27,11 @@ export async function GET() {
         isComplete: true,
         userId: { not: userId },
       },
+      include: {
+        user: {
+          include: { photos: { orderBy: { position: "asc" }, take: 1 } },
+        },
+      },
     }),
   ]);
 
@@ -50,6 +55,7 @@ export async function GET() {
         budgetMax: c.budgetMax,
         interests: c.interests,
         verified: c.verified,
+        photoUrl: c.user.photos[0]?.url ?? null,
         compatibilityScore: score,
         compatibilityBreakdown: breakdown,
       };
