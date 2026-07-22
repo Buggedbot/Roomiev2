@@ -43,6 +43,28 @@ intentionally out of scope for now; see "What's not built yet" below.
 
    Open [http://localhost:3000](http://localhost:3000).
 
+## Authentication setup
+
+Email/password sign-in works with the local `JWT_SECRET`. Google Sign-In and
+phone OTP are enabled once you add the following values to `.env`:
+
+```bash
+APP_URL="http://localhost:3000"
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+TWILIO_ACCOUNT_SID=""
+TWILIO_AUTH_TOKEN=""
+TWILIO_VERIFY_SERVICE_SID=""
+```
+
+For Google, create a **Web application** OAuth client in Google Cloud and add
+`http://localhost:3000/api/auth/google/callback` as an authorized redirect URI.
+Add your deployed callback URL there as well before going live.
+
+For phone OTP, create a Twilio Verify service and copy its Account SID, Auth
+Token, and Verify Service SID into the variables above. Phone numbers must be
+entered in E.164 format, such as `+919876543210`.
+
 ## How matching works
 
 `src/lib/matching.ts` computes a 0–100 compatibility score between two

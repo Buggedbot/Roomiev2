@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Card, ErrorText, Input, Label } from "@/components/ui";
+import { PhoneOtpForm } from "@/components/phone-otp-form";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,6 +33,11 @@ export default function RegisterPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handlePhoneVerified(redirectTo: string) {
+    router.push(redirectTo);
+    router.refresh();
   }
 
   return (
@@ -71,6 +77,20 @@ export default function RegisterPage() {
             {loading ? "Creating account…" : "Create account"}
           </Button>
         </form>
+
+        <div className="my-6 flex items-center gap-3 text-xs text-muted">
+          <span className="h-px flex-1 bg-border" /> or continue with <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <div className="space-y-3">
+          <a
+            href="/api/auth/google"
+            className="inline-flex w-full items-center justify-center rounded-full border border-border px-5 py-2.5 text-sm font-medium transition hover:bg-foreground/5"
+          >
+            Continue with Google
+          </a>
+          <PhoneOtpForm onVerified={handlePhoneVerified} />
+        </div>
 
         <p className="mt-6 text-center text-sm text-muted">
           Already have an account?{" "}

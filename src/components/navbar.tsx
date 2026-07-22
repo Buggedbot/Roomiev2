@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUserId } from "@/lib/auth";
 import { LogoutButton } from "@/components/logout-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export async function Navbar() {
   const userId = await getCurrentUserId();
@@ -20,13 +21,18 @@ export async function Navbar() {
             <Link href="/matches" className="rounded-full px-3 py-1.5 hover:bg-foreground/5">
               Matches
             </Link>
+            <Link href="/teams" className="rounded-full px-3 py-1.5 hover:bg-foreground/5">
+              Team
+            </Link>
             <Link href="/profile/setup" className="rounded-full px-3 py-1.5 hover:bg-foreground/5">
               Profile
             </Link>
+            <ThemeToggle />
             <LogoutButton />
           </nav>
         ) : (
           <nav className="flex items-center gap-2 text-sm">
+            <ThemeToggle />
             <Link href="/login" className="rounded-full px-3 py-1.5 hover:bg-foreground/5">
               Log in
             </Link>

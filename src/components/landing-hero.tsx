@@ -127,7 +127,7 @@ export function LandingHero() {
             <div className="space-y-3 p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-bold">Priya, 22</h3>
+                  <h3 className="font-bold">Shayan, 22</h3>
                   <p className="text-xs text-muted">
                     Design · Koramangala
                   </p>

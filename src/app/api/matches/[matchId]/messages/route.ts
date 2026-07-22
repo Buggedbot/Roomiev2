@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/auth";
+import { assertParticipant } from "@/lib/matches";
 import { messageSchema } from "@/lib/validation";
-
-async function assertParticipant(matchId: string, userId: string) {
-  const match = await prisma.match.findUnique({ where: { id: matchId } });
-  if (!match) return null;
-  if (match.userAId !== userId && match.userBId !== userId) return null;
-  return match;
-}
+import { publish } from "@/lib/chat-realtime";
 
 export async function GET(
   _req: NextRequest,
@@ -23,6 +18,14 @@ export async function GET(
   const match = await assertParticipant(matchId, userId);
   if (!match) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const { count } = await prisma.message.updateMany({
+    where: { matchId, senderId: { not: userId }, readAt: null },
+    data: { readAt: new Date() },
+  });
+  if (count > 0) {
+    publish(matchId, { type: "read", readerId: userId, readAt: new Date().toISOString() });
   }
 
   const messages = await prisma.message.findMany({
@@ -60,6 +63,8 @@ export async function POST(
   const message = await prisma.message.create({
     data: { matchId, senderId: userId, content: parsed.data.content },
   });
+
+  publish(matchId, { type: "message", message });
 
   return NextResponse.json({ message }, { status: 201 });
 }

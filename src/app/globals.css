@@ -28,10 +28,30 @@
   :root {
     --background: #121014;
     --foreground: #f2f1f5;
+    --primary: #9163f2;
     --card: #1c1a22;
     --border: #2c2933;
     --muted: #9b96a8;
   }
+}
+
+/* Explicit in-app choice overrides the OS preference in either direction. */
+:root[data-theme="dark"] {
+  --background: #121014;
+  --foreground: #f2f1f5;
+  --primary: #9163f2;
+  --card: #1c1a22;
+  --border: #2c2933;
+  --muted: #9b96a8;
+}
+
+:root[data-theme="light"] {
+  --background: #faf9fb;
+  --foreground: #1c1a24;
+  --primary: #7c3aed;
+  --card: #ffffff;
+  --border: #e7e5ec;
+  --muted: #6b6779;
 }
 
 body {

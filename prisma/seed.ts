@@ -521,7 +521,8 @@ async function main() {
   console.log(`Seeding ${seedProfiles.length} demo users…`);
   const passwordHash = await bcrypt.hash("password123", 10);
 
-  for (const p of seedProfiles) {
+  for (const [i, p] of seedProfiles.entries()) {
+    const listingType = i % 2 === 0 ? ("HAS_ROOM" as const) : ("NEEDS_ROOM" as const);
     const user = await prisma.user.upsert({
       where: { email: p.email },
       create: {
@@ -541,6 +542,7 @@ async function main() {
         age: p.age,
         gender: p.gender,
         genderPreference: p.genderPreference,
+        listingType,
         college: p.college,
         course: p.course,
         year: p.year,
@@ -566,6 +568,7 @@ async function main() {
         age: p.age,
         gender: p.gender,
         genderPreference: p.genderPreference,
+        listingType,
         college: p.college,
         course: p.course,
         year: p.year,

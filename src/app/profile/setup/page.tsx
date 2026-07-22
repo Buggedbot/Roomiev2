@@ -1,21 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Camera,
   Check,
   ChevronLeft,
+  CloudAlert,
+  CloudCheck,
   GraduationCap,
+  KeyRound,
+  Loader2,
   MapPin,
   Sparkles,
+  Users,
   UserRound,
 } from "lucide-react";
 import { Button, Card, ErrorText, Input, Label, Select, Textarea } from "@/components/ui";
 import { PhotoUploader } from "@/components/photo-uploader";
+import { CityAutocomplete, type CitySelection } from "@/components/city-autocomplete";
+import { AreaAutocomplete } from "@/components/area-autocomplete";
 
 type FormState = {
+  listingType: string;
   name: string;
   bio: string;
   age: string;
@@ -25,6 +33,11 @@ type FormState = {
   course: string;
   year: string;
   city: string;
+  state: string;
+  country: string;
+  placeId: string;
+  latitude: number | null;
+  longitude: number | null;
   preferredArea: string;
   budgetMin: string;
   budgetMax: string;
@@ -41,6 +54,7 @@ type FormState = {
 };
 
 const initialState: FormState = {
+  listingType: "",
   name: "",
   bio: "",
   age: "",
@@ -50,6 +64,11 @@ const initialState: FormState = {
   course: "",
   year: "",
   city: "",
+  state: "",
+  country: "",
+  placeId: "",
+  latitude: null,
+  longitude: null,
   preferredArea: "",
   budgetMin: "",
   budgetMax: "",
@@ -66,6 +85,12 @@ const initialState: FormState = {
 };
 
 const profileSteps = [
+  {
+    title: "What are you looking for?",
+    shortTitle: "Intent",
+    description: "Tell us whether you already have a room or you're searching for one together.",
+    icon: KeyRound,
+  },
   {
     title: "Add your photos",
     shortTitle: "Photos",
@@ -105,6 +130,10 @@ export default function ProfileSetupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const skipNextAutosave = useRef(true);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const step = profileSteps[currentStep];
   const StepIcon = step.icon;
   const isLastStep = currentStep === profileSteps.length - 1;
@@ -115,7 +144,9 @@ export default function ProfileSetupPage() {
       .then((data) => {
         if (data.profile) {
           const profile = data.profile;
+          setIsEditMode(Boolean(profile.isComplete));
           setForm({
+            listingType: profile.listingType ?? "",
             name: profile.name ?? "",
             bio: profile.bio ?? "",
             age: String(profile.age ?? ""),
@@ -125,6 +156,11 @@ export default function ProfileSetupPage() {
             course: profile.course ?? "",
             year: profile.year ? String(profile.year) : "",
             city: profile.city ?? "",
+            state: profile.state ?? "",
+            country: profile.country ?? "",
+            placeId: profile.placeId ?? "",
+            latitude: profile.latitude ?? null,
+            longitude: profile.longitude ?? null,
             preferredArea: profile.preferredArea ?? "",
             budgetMin: String(profile.budgetMin ?? ""),
             budgetMax: String(profile.budgetMax ?? ""),
@@ -144,12 +180,76 @@ export default function ProfileSetupPage() {
       .finally(() => setLoaded(true));
   }, []);
 
+  // The profile load above changes `form`, which would otherwise be mistaken
+  // for a user edit by the autosave effect below — re-arm the skip guard
+  // whenever `loaded` flips, so that load never triggers a spurious save.
+  useEffect(() => {
+    if (loaded) skipNextAutosave.current = true;
+  }, [loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
+
+    setAutosaveStatus("idle");
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      void saveDraft();
+    }, 1000);
+
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+    // buildPayload/saveDraft are plain functions of `form`; including them would defeat the debounce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, loaded]);
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((currentForm) => ({ ...currentForm, [key]: value }));
   }
 
+  function handleCityValueChange(text: string) {
+    setForm((current) => ({
+      ...current,
+      city: text,
+      placeId: "",
+      latitude: null,
+      longitude: null,
+      preferredArea: current.city === text ? current.preferredArea : "",
+    }));
+  }
+
+  function handleCitySelect(selection: CitySelection) {
+    setForm((current) => ({
+      ...current,
+      city: selection.city,
+      state: selection.state,
+      country: selection.country,
+      placeId: selection.placeId,
+      latitude: selection.latitude,
+      longitude: selection.longitude,
+      preferredArea: current.city === selection.city ? current.preferredArea : "",
+    }));
+  }
+
+  function blockNonNumericKey(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (["e", "E", "+", "-", "."].includes(event.key)) {
+      event.preventDefault();
+    }
+  }
+
   function moveToStep(nextStep: number) {
-    if (nextStep > currentStep) {
+    // First-time onboarding still moves forward one step at a time so
+    // required fields aren't skipped; editing an already-complete profile
+    // allows jumping straight to any section.
+    if (!isEditMode && nextStep > currentStep) {
+      if (currentStep === 0 && !form.listingType) {
+        setError("Choose one of the two options to continue.");
+        return;
+      }
       const setupForm = document.getElementById("profile-setup-form") as HTMLFormElement | null;
       if (!setupForm?.reportValidity()) return;
     }
@@ -157,6 +257,54 @@ export default function ProfileSetupPage() {
     setError(null);
     setCurrentStep(nextStep);
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Flush a save on every step change so progress survives an accidental
+    // navigation away, instead of waiting for the debounce below to fire.
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    void saveDraft();
+  }
+
+  async function saveDraft() {
+    setAutosaveStatus("saving");
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(false)),
+      });
+      setAutosaveStatus(response.ok ? "saved" : "error");
+    } catch {
+      setAutosaveStatus("error");
+    }
+  }
+
+  function buildPayload(finalize: boolean) {
+    const raw: Record<string, unknown> = {
+      ...form,
+      age: form.age ? Number(form.age) : undefined,
+      year: form.year ? Number(form.year) : undefined,
+      latitude: form.latitude ?? undefined,
+      longitude: form.longitude ?? undefined,
+      budgetMin: form.budgetMin ? Number(form.budgetMin) : undefined,
+      budgetMax: form.budgetMax ? Number(form.budgetMax) : undefined,
+      languages: form.languages
+        .split(",")
+        .map((language) => language.trim())
+        .filter(Boolean),
+      interests: form.interests
+        .split(",")
+        .map((interest) => interest.trim())
+        .filter(Boolean),
+      moveInDate: form.moveInDate || undefined,
+      finalize,
+    };
+
+    // Drop empty-string fields so a partial draft doesn't trip "required"
+    // validation on sections the user hasn't reached yet.
+    for (const key of Object.keys(raw)) {
+      if (raw[key] === "") delete raw[key];
+    }
+    return raw;
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -164,35 +312,22 @@ export default function ProfileSetupPage() {
     setError(null);
     setLoading(true);
     try {
-      const payload = {
-        ...form,
-        age: Number(form.age),
-        year: form.year ? Number(form.year) : undefined,
-        budgetMin: Number(form.budgetMin),
-        budgetMax: Number(form.budgetMax),
-        languages: form.languages
-          .split(",")
-          .map((language) => language.trim())
-          .filter(Boolean),
-        interests: form.interests
-          .split(",")
-          .map((interest) => interest.trim())
-          .filter(Boolean),
-        moveInDate: form.moveInDate || undefined,
-      };
-
       const response = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(buildPayload(true)),
       });
       const data = await response.json();
       if (!response.ok) {
         setError(data.error ?? "Something went wrong");
         return;
       }
-      router.push("/discover");
-      router.refresh();
+      if (isEditMode) {
+        setAutosaveStatus("saved");
+      } else {
+        router.push("/discover");
+        router.refresh();
+      }
     } finally {
       setLoading(false);
     }
@@ -204,20 +339,41 @@ export default function ProfileSetupPage() {
     <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-14">
       <div className="text-center">
         <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-          <Sparkles className="h-3.5 w-3.5" /> Profile setup
+          <Sparkles className="h-3.5 w-3.5" /> {isEditMode ? "Edit profile" : "Profile setup"}
         </p>
-        <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">Find a roommate who fits your rhythm</h1>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+          {isEditMode ? "Update your roommate profile" : "Find a roommate who fits your rhythm"}
+        </h1>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted sm:text-base">
-          A few thoughtful details help us introduce you to compatible people.
+          {isEditMode
+            ? "Jump to any section below — your changes save automatically."
+            : "A few thoughtful details help us introduce you to compatible people."}
         </p>
       </div>
 
       <div className="mt-8" aria-label="Profile setup progress">
         <div className="flex items-center justify-between text-xs font-medium text-muted">
           <span>Step {currentStep + 1} of {profileSteps.length}</span>
-          <span>{step.shortTitle}</span>
+          <span className="flex items-center gap-3">
+            {autosaveStatus === "saving" && (
+              <span className="flex items-center gap-1.5 text-muted">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+              </span>
+            )}
+            {autosaveStatus === "saved" && (
+              <span className="flex items-center gap-1.5 text-primary">
+                <CloudCheck className="h-3.5 w-3.5" /> Saved
+              </span>
+            )}
+            {autosaveStatus === "error" && (
+              <span className="flex items-center gap-1.5 text-red-500">
+                <CloudAlert className="h-3.5 w-3.5" /> Couldn&apos;t save
+              </span>
+            )}
+            <span>{step.shortTitle}</span>
+          </span>
         </div>
-        <div className="mt-3 grid grid-cols-5 gap-2">
+        <div className="mt-3 grid grid-cols-6 gap-2">
           {profileSteps.map((profileStep, index) => {
             const isActive = index === currentStep;
             const isComplete = index < currentStep;
@@ -229,7 +385,7 @@ export default function ProfileSetupPage() {
                 type="button"
                 aria-label={`Go to ${profileStep.shortTitle}`}
                 aria-current={isActive ? "step" : undefined}
-                disabled={index > currentStep}
+                disabled={!isEditMode && index > currentStep}
                 onClick={() => moveToStep(index)}
                 className={`group flex items-center gap-2 rounded-full transition ${
                   isActive ? "text-primary" : isComplete ? "text-foreground" : "text-muted"
@@ -269,6 +425,57 @@ export default function ProfileSetupPage() {
 
           <div className="p-6 sm:p-8">
             {currentStep === 0 && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => update("listingType", "HAS_ROOM")}
+                  className={`flex flex-col items-start gap-3 rounded-2xl border-2 p-5 text-left transition ${
+                    form.listingType === "HAS_ROOM"
+                      ? "border-primary bg-primary/5 shadow-sm shadow-primary/20"
+                      : "border-border hover:border-primary/40"
+                  }`}
+                >
+                  <span
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                      form.listingType === "HAS_ROOM" ? "bg-primary text-primary-foreground" : "bg-foreground/5"
+                    }`}
+                  >
+                    <KeyRound className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-semibold">I already have a room</p>
+                    <p className="mt-1 text-sm text-muted">
+                      You have a place and want to find a roommate to join you.
+                    </p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => update("listingType", "NEEDS_ROOM")}
+                  className={`flex flex-col items-start gap-3 rounded-2xl border-2 p-5 text-left transition ${
+                    form.listingType === "NEEDS_ROOM"
+                      ? "border-primary bg-primary/5 shadow-sm shadow-primary/20"
+                      : "border-border hover:border-primary/40"
+                  }`}
+                >
+                  <span
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                      form.listingType === "NEEDS_ROOM" ? "bg-primary text-primary-foreground" : "bg-foreground/5"
+                    }`}
+                  >
+                    <Users className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-semibold">I need a room too</p>
+                    <p className="mt-1 text-sm text-muted">
+                      You're also searching, and want to match with someone to find a place together.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {currentStep === 1 && (
               <div className="space-y-5">
                 <PhotoUploader />
                 <p className="rounded-xl bg-foreground/5 px-4 py-3 text-sm text-muted">
@@ -277,7 +484,7 @@ export default function ProfileSetupPage() {
               </div>
             )}
 
-            {currentStep === 1 && (
+            {currentStep === 2 && (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <Label htmlFor="name">Full name</Label>
@@ -311,7 +518,7 @@ export default function ProfileSetupPage() {
               </div>
             )}
 
-            {currentStep === 2 && (
+            {currentStep === 3 && (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <Label htmlFor="college">College / University</Label>
@@ -328,23 +535,34 @@ export default function ProfileSetupPage() {
               </div>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="city">City</Label>
-                  <Input id="city" required value={form.city} onChange={(event) => update("city", event.target.value)} placeholder="e.g. Bengaluru" />
+                  <CityAutocomplete
+                    id="city"
+                    required
+                    value={form.city}
+                    onValueChange={handleCityValueChange}
+                    onSelect={handleCitySelect}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="preferredArea">Preferred area</Label>
-                  <Input id="preferredArea" value={form.preferredArea} onChange={(event) => update("preferredArea", event.target.value)} placeholder="e.g. Koramangala" />
+                  <AreaAutocomplete
+                    id="preferredArea"
+                    city={form.city}
+                    value={form.preferredArea}
+                    onValueChange={(text) => update("preferredArea", text)}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="budgetMin">Budget min (per month)</Label>
-                  <Input id="budgetMin" type="number" required min={0} value={form.budgetMin} onChange={(event) => update("budgetMin", event.target.value)} placeholder="e.g. 12000" />
+                  <Input id="budgetMin" type="number" required min={0} inputMode="numeric" pattern="[0-9]*" value={form.budgetMin} onKeyDown={blockNonNumericKey} onChange={(event) => update("budgetMin", event.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 12000" />
                 </div>
                 <div>
                   <Label htmlFor="budgetMax">Budget max (per month)</Label>
-                  <Input id="budgetMax" type="number" required min={0} value={form.budgetMax} onChange={(event) => update("budgetMax", event.target.value)} placeholder="e.g. 18000" />
+                  <Input id="budgetMax" type="number" required min={0} inputMode="numeric" pattern="[0-9]*" value={form.budgetMax} onKeyDown={blockNonNumericKey} onChange={(event) => update("budgetMax", event.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 18000" />
                 </div>
                 <div className="sm:col-span-2">
                   <Label htmlFor="moveInDate">Move-in date</Label>
@@ -353,7 +571,7 @@ export default function ProfileSetupPage() {
               </div>
             )}
 
-            {currentStep === 4 && (
+            {currentStep === 5 && (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="foodPreference">Food preference</Label>
@@ -434,9 +652,10 @@ export default function ProfileSetupPage() {
             <span />
           )}
 
-          {isLastStep ? (
+          {isEditMode || isLastStep ? (
             <Button type="submit" disabled={loading} className="min-w-40">
-              {loading ? "Saving…" : "Find my matches"} {!loading && <ArrowRight className="h-4 w-4" />}
+              {loading ? "Saving…" : isEditMode ? "Save changes" : "Find my matches"}{" "}
+              {!loading && <ArrowRight className="h-4 w-4" />}
             </Button>
           ) : (
             <Button type="button" onClick={() => moveToStep(currentStep + 1)} className="min-w-36">

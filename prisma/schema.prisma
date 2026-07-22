@@ -59,61 +59,96 @@ enum SwipeAction {
   PASS
 }
 
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  emailVerified Boolean @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+enum ListingType {
+  HAS_ROOM
+  NEEDS_ROOM
+}
 
-  profile         Profile?
-  photos          Photo[]
-  sentLikes       Like[]        @relation("LikesGiven")
-  receivedLikes   Like[]        @relation("LikesReceived")
-  matchesAsUserA  Match[]       @relation("MatchUserA")
-  matchesAsUserB  Match[]       @relation("MatchUserB")
-  messages        Message[]
+enum TeamStatus {
+  ACTIVE
+  DISBANDED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum LikeDirection {
+  FROM_TEAM
+  FROM_USER
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String?  @unique
+  passwordHash  String?
+  googleId      String?  @unique
+  phone         String?  @unique
+  emailVerified Boolean  @default(false)
+  phoneVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile        Profile?
+  photos         Photo[]
+  sentLikes      Like[]    @relation("LikesGiven")
+  receivedLikes  Like[]    @relation("LikesReceived")
+  matchesAsUserA Match[]   @relation("MatchUserA")
+  matchesAsUserB Match[]   @relation("MatchUserB")
+  messages       Message[]
+
+  ledTeams        Team[]       @relation("TeamCaptain")
+  teamMemberships TeamMember[]
+  teamInvites     TeamInvite[]
+  teamLikes       TeamLike[]
 
   @@map("users")
 }
 
 model Profile {
-  id               String            @id @default(cuid())
-  userId           String            @unique
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name             String
-  bio              String            @default("")
-  age              Int
-  gender           Gender
-  genderPreference GenderPreference  @default(ANY)
+  name             String?
+  bio              String           @default("")
+  age              Int?
+  gender           Gender?
+  genderPreference GenderPreference @default(ANY)
+  listingType      ListingType?
 
-  college          String
-  course           String?
-  year             Int?
+  college String?
+  course  String?
+  year    Int?
 
-  city             String
-  preferredArea    String?
-  budgetMin        Int
-  budgetMax        Int
+  city          String?
+  state         String?
+  country       String?
+  placeId       String?
+  latitude      Float?
+  longitude     Float?
+  preferredArea String?
+  budgetMin     Int?
+  budgetMax     Int?
 
-  languages        String[]          @default([])
-  foodPreference   FoodPreference
-  smoking          HabitLevel        @default(NEVER)
-  drinking         HabitLevel        @default(NEVER)
-  sleepSchedule    SleepSchedule
-  cleanliness      Cleanliness
-  pets             Boolean           @default(false)
-  studyHabits      StudyHabits       @default(MODERATE)
-  interests        String[]          @default([])
+  languages      String[]        @default([])
+  foodPreference FoodPreference?
+  smoking        HabitLevel      @default(NEVER)
+  drinking       HabitLevel      @default(NEVER)
+  sleepSchedule  SleepSchedule?
+  cleanliness    Cleanliness?
+  pets           Boolean         @default(false)
+  studyHabits    StudyHabits     @default(MODERATE)
+  interests      String[]        @default([])
 
-  moveInDate       DateTime?
-  verified         Boolean           @default(false)
+  moveInDate DateTime?
+  verified   Boolean   @default(false)
 
-  isComplete       Boolean           @default(false)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  isComplete Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@map("profiles")
 }
@@ -143,27 +178,96 @@ model Like {
 }
 
 model Match {
-  id         String    @id @default(cuid())
-  userAId    String
-  userA      User      @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
-  userBId    String
-  userB      User      @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
-  createdAt  DateTime  @default(now())
+  id        String   @id @default(cuid())
+  userAId   String
+  userA     User     @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId   String?
+  userB     User?    @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  teamId    String?
+  team      Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
-  messages   Message[]
+  messages Message[]
 
   @@unique([userAId, userBId])
+  @@unique([userAId, teamId])
   @@map("matches")
 }
 
+// A small group of NEEDS_ROOM users who search together, so a HAS_ROOM
+// lister can match with the whole group at once instead of one at a time.
+model Team {
+  id        String     @id @default(cuid())
+  captainId String
+  captain   User       @relation("TeamCaptain", fields: [captainId], references: [id], onDelete: Cascade)
+  status    TeamStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  members TeamMember[]
+  invites TeamInvite[]
+  likes   TeamLike[]
+  matches Match[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  teamId   String
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+model TeamInvite {
+  id          String       @id @default(cuid())
+  teamId      String
+  team        Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User         @relation(fields: [toUserId], references: [id], onDelete: Cascade)
+  status      InviteStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  respondedAt DateTime?
+
+  @@unique([teamId, toUserId])
+  @@map("team_invites")
+}
+
+// Records a swipe between a team (as a unit) and an individual HAS_ROOM
+// user. `direction` distinguishes who initiated it, since a mutual pair
+// (one FROM_TEAM row + one FROM_USER row, both LIKE/SUPER_LIKE) is what
+// turns into a team Match — mirroring how Like rows work for 1:1 swipes.
+model TeamLike {
+  id        String        @id @default(cuid())
+  teamId    String
+  team      Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  direction LikeDirection
+  action    SwipeAction
+  createdAt DateTime      @default(now())
+
+  @@unique([teamId, userId, direction])
+  @@map("team_likes")
+}
+
 model Message {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   matchId   String
-  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
   senderId  String
-  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  content   String
-  createdAt DateTime @default(now())
+  sender    User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content   String    @default("")
+  imageUrl  String?
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+  readAt    DateTime?
 
   @@index([matchId, createdAt])
   @@map("messages")

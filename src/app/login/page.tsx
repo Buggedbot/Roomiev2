@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button, Card, ErrorText, Input, Label } from "@/components/ui";
+import { PhoneOtpForm } from "@/components/phone-otp-form";
 
 export default function LoginPage() {
   return (
@@ -16,9 +17,12 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const providerError = searchParams.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    providerError ? "Google sign-in could not be completed. Please try again." : null
+  );
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -41,6 +45,11 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handlePhoneVerified(redirectTo: string) {
+    router.push(redirectTo);
+    router.refresh();
   }
 
   return (
@@ -77,6 +86,20 @@ function LoginForm() {
             {loading ? "Logging in…" : "Log in"}
           </Button>
         </form>
+
+        <div className="my-6 flex items-center gap-3 text-xs text-muted">
+          <span className="h-px flex-1 bg-border" /> or continue with <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <div className="space-y-3">
+          <a
+            href="/api/auth/google"
+            className="inline-flex w-full items-center justify-center rounded-full border border-border px-5 py-2.5 text-sm font-medium transition hover:bg-foreground/5"
+          >
+            Continue with Google
+          </a>
+          <PhoneOtpForm onVerified={handlePhoneVerified} />
+        </div>
 
         <p className="mt-6 text-center text-sm text-muted">
           Don&apos;t have an account?{" "}

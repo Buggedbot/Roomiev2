@@ -1,34 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Heart, Star, X } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button, Card } from "@/components/ui";
-import { Avatar } from "@/components/avatar";
-
-type CompatibilityFactor = {
-  factor: string;
-  weight: number;
-  score: number;
-  reason: string;
-};
-
-type Candidate = {
-  userId: string;
-  name: string;
-  age: number;
-  bio: string;
-  college: string;
-  course: string | null;
-  city: string;
-  preferredArea: string | null;
-  budgetMin: number;
-  budgetMax: number;
-  interests: string[];
-  verified: boolean;
-  photoUrl: string | null;
-  compatibilityScore: number;
-  compatibilityBreakdown: CompatibilityFactor[];
-};
+import { SwipeCard, type Candidate, type SwipeAction, type SwipeCardHandle } from "@/components/swipe-card";
 
 export default function DiscoverPage() {
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
@@ -38,6 +15,7 @@ export default function DiscoverPage() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const frontCardRef = useRef<SwipeCardHandle>(null);
 
   useEffect(() => {
     fetch("/api/discover")
@@ -53,26 +31,36 @@ export default function DiscoverPage() {
   }, []);
 
   const current = candidates?.[index];
+  const stack = candidates?.slice(index, index + 3) ?? [];
 
-  async function swipe(action: "LIKE" | "SUPER_LIKE" | "PASS") {
-    if (!current || busy) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/swipe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toUserId: current.userId, action }),
-      });
-      const data = await res.json();
-      if (res.ok && data.matched) {
-        setMatchedWith(current.name);
-        setMatchId(data.matchId);
-      }
-      setShowBreakdown(false);
-      setIndex((i) => i + 1);
-    } finally {
-      setBusy(false);
+  async function recordSwipe(candidate: Candidate, action: SwipeAction) {
+    const res = await fetch("/api/swipe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        candidate.isTeam
+          ? { toTeamId: candidate.id, action }
+          : { toUserId: candidate.id, action }
+      ),
+    });
+    const data = await res.json();
+    if (res.ok && data.matched) {
+      setMatchedWith(current?.name ?? null);
+      setMatchId(data.matchId);
     }
+  }
+
+  // Called by SwipeCard once its own fly-off animation has finished.
+  function handleCardExited(action: SwipeAction) {
+    if (!current) return;
+    void recordSwipe(current, action).finally(() => setBusy(false));
+    setShowBreakdown(false);
+    setIndex((i) => i + 1);
+  }
+
+  function triggerSwipe(action: SwipeAction) {
+    if (!current || busy) return;
+    frontCardRef.current?.triggerSwipe(action);
   }
 
   if (error === "Complete your profile first") {
@@ -112,87 +100,60 @@ export default function DiscoverPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 py-8">
-      <Card className="flex flex-1 flex-col overflow-hidden">
-        {current.photoUrl ? (
-          <div className="aspect-[4/3] w-full overflow-hidden bg-foreground/5">
-            <Avatar name={current.name} photoUrl={current.photoUrl} className="h-full w-full" />
-          </div>
-        ) : (
-          <div className="flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20 py-10">
-            <Avatar name={current.name} className="h-24 w-24 text-3xl" />
-          </div>
-        )}
+      <div className="relative h-[68vh] max-h-[640px] min-h-[420px] w-full">
+        {stack.map((candidate, position) => (
+          <SwipeCard
+            key={candidate.id}
+            ref={position === 0 ? frontCardRef : undefined}
+            candidate={candidate}
+            stackPosition={position}
+            busy={busy}
+            showBreakdown={position === 0 && showBreakdown}
+            onToggleBreakdown={() => setShowBreakdown((s) => !s)}
+            onSwipeStart={() => setBusy(true)}
+            onSwipe={handleCardExited}
+          />
+        ))}
+      </div>
 
-        <div className="flex-1 space-y-4 p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-bold">
-                {current.name}, {current.age}
-              </h2>
-              <p className="text-sm text-muted">
-                {current.college}
-                {current.course ? ` · ${current.course}` : ""}
-              </p>
-              <p className="text-sm text-muted">
-                {current.city}
-                {current.preferredArea ? ` · ${current.preferredArea}` : ""}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowBreakdown((s) => !s)}
-              className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-full bg-primary/10 text-primary"
-            >
-              <span className="text-lg font-bold leading-none">{current.compatibilityScore}%</span>
-              <span className="text-[10px] leading-none">match</span>
-            </button>
-          </div>
-
-          {current.bio && <p className="text-sm">{current.bio}</p>}
-
-          <p className="text-sm text-muted">
-            Budget: ₹{current.budgetMin.toLocaleString()}–₹{current.budgetMax.toLocaleString()}/mo
-          </p>
-
-          {current.interests.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {current.interests.map((interest) => (
-                <span key={interest} className="rounded-full bg-foreground/5 px-3 py-1 text-xs">
-                  {interest}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {showBreakdown && (
-            <div className="space-y-2 rounded-xl border border-border bg-foreground/[0.03] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                Why you matched
-              </p>
-              {current.compatibilityBreakdown.map((f) => (
-                <div key={f.factor} className="flex items-center justify-between text-sm">
-                  <span>{f.factor}</span>
-                  <span className="text-muted">{Math.round(f.score * 100)}%</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-center gap-4 border-t border-border p-4">
-          <Button variant="outline" onClick={() => swipe("PASS")} disabled={busy} className="h-14 w-14 !rounded-full !p-0 text-xl">
-            ✕
-          </Button>
-          <Button onClick={() => swipe("SUPER_LIKE")} disabled={busy} variant="secondary" className="h-14 w-14 !rounded-full !p-0 text-xl">
-            ★
-          </Button>
-          <Button onClick={() => swipe("LIKE")} disabled={busy} className="h-14 w-14 !rounded-full !p-0 text-xl">
-            ♥
-          </Button>
-        </div>
-      </Card>
+      <div className="mt-6 flex items-center justify-center gap-5">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          onClick={() => triggerSwipe("PASS")}
+          disabled={busy}
+          aria-label="Pass"
+          className="flex h-16 w-16 items-center justify-center rounded-full bg-card text-red-500 shadow-lg shadow-black/10 ring-1 ring-border transition disabled:opacity-50"
+        >
+          <X className="h-7 w-7" />
+        </motion.button>
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          onClick={() => triggerSwipe("SUPER_LIKE")}
+          disabled={busy}
+          aria-label="Super like"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-card text-sky-400 shadow-lg shadow-black/10 ring-1 ring-border transition disabled:opacity-50"
+        >
+          <Star className="h-6 w-6" />
+        </motion.button>
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          onClick={() => triggerSwipe("LIKE")}
+          disabled={busy}
+          aria-label="Like"
+          className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-lg shadow-primary/30 transition disabled:opacity-50"
+        >
+          <Heart className="h-7 w-7 fill-current" />
+        </motion.button>
+      </div>
 
       {matchedWith && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 px-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
           <Card className="w-full max-w-sm p-8 text-center">
             <h3 className="text-2xl font-bold text-primary">It&apos;s a match!</h3>
             <p className="mt-2 text-sm text-muted">You and {matchedWith} liked each other.</p>

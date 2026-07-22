@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Users } from "lucide-react";
 import { Card } from "@/components/ui";
 import { Avatar } from "@/components/avatar";
 import { formatDistanceToNow } from "date-fns";
@@ -9,8 +10,9 @@ import { formatDistanceToNow } from "date-fns";
 type MatchSummary = {
   matchId: string;
   createdAt: string;
-  otherUser: { id: string; name: string; photoUrl: string | null };
+  otherUser: { id: string; name: string; photoUrl: string | null; isTeam: boolean };
   lastMessage: { content: string; createdAt: string } | null;
+  unreadCount: number;
 };
 
 export default function MatchesPage() {
@@ -48,16 +50,26 @@ export default function MatchesPage() {
                 className="h-12 w-12 shrink-0 text-lg"
               />
               <div className="min-w-0 flex-1">
-                <p className="font-medium">{m.otherUser.name}</p>
-                <p className="truncate text-sm text-muted">
+                <p className={`flex items-center gap-1.5 ${m.unreadCount > 0 ? "font-semibold" : "font-medium"}`}>
+                  {m.otherUser.isTeam && <Users className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                  {m.otherUser.name}
+                </p>
+                <p className={`truncate text-sm ${m.unreadCount > 0 ? "font-medium text-foreground" : "text-muted"}`}>
                   {m.lastMessage ? m.lastMessage.content : "Say hello 👋"}
                 </p>
               </div>
-              <span className="shrink-0 text-xs text-muted">
-                {formatDistanceToNow(new Date(m.lastMessage?.createdAt ?? m.createdAt), {
-                  addSuffix: true,
-                })}
-              </span>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <span className="text-xs text-muted">
+                  {formatDistanceToNow(new Date(m.lastMessage?.createdAt ?? m.createdAt), {
+                    addSuffix: true,
+                  })}
+                </span>
+                {m.unreadCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                    {m.unreadCount > 9 ? "9+" : m.unreadCount}
+                  </span>
+                )}
+              </div>
             </Card>
           </Link>
         ))}

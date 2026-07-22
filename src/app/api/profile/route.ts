@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/auth";
-import { profileSchema } from "@/lib/validation";
+import { profileSchema, profileDraftSchema } from "@/lib/validation";
 
 export async function GET() {
   const userId = await getCurrentUserId();
@@ -20,7 +20,13 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  const parsed = profileSchema.safeParse(body);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  }
+
+  const { finalize, ...fields } = body as Record<string, unknown> & { finalize?: boolean };
+  const schema = finalize ? profileSchema : profileDraftSchema;
+  const parsed = schema.safeParse(fields);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid input" },
@@ -28,7 +34,7 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  const data = { ...parsed.data, isComplete: true };
+  const data = finalize ? { ...parsed.data, isComplete: true } : parsed.data;
 
   const profile = await prisma.profile.upsert({
     where: { userId },

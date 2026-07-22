@@ -1,5 +1,39 @@
 import type { Profile } from "@/generated/prisma/client";
 
+// The onboarding form autosaves partial drafts, so most Profile columns are
+// nullable in the DB. Matching only ever runs on profiles that finished
+// onboarding, where these fields are guaranteed to be filled in.
+export type CompleteProfile = Profile & {
+  name: string;
+  age: number;
+  gender: NonNullable<Profile["gender"]>;
+  listingType: NonNullable<Profile["listingType"]>;
+  college: string;
+  city: string;
+  budgetMin: number;
+  budgetMax: number;
+  foodPreference: NonNullable<Profile["foodPreference"]>;
+  sleepSchedule: NonNullable<Profile["sleepSchedule"]>;
+  cleanliness: NonNullable<Profile["cleanliness"]>;
+};
+
+export function isCompleteProfile<T extends Profile>(profile: T): profile is T & CompleteProfile {
+  return (
+    profile.isComplete &&
+    profile.name !== null &&
+    profile.age !== null &&
+    profile.gender !== null &&
+    profile.listingType !== null &&
+    profile.college !== null &&
+    profile.city !== null &&
+    profile.budgetMin !== null &&
+    profile.budgetMax !== null &&
+    profile.foodPreference !== null &&
+    profile.sleepSchedule !== null &&
+    profile.cleanliness !== null
+  );
+}
+
 export type CompatibilityFactor = {
   factor: string;
   weight: number;
@@ -24,11 +58,45 @@ const WEIGHTS = {
   studyHabits: 5,
 } as const;
 
+const MAX_DISTANCE_KM = 40;
+const EARTH_RADIUS_KM = 6371;
+
+function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return EARTH_RADIUS_KM * 2 * Math.asin(Math.sqrt(a));
+}
+
+// Prefer an actual distance check when both profiles have coordinates (from
+// city autocomplete/GPS); fall back to exact city-name match for older
+// profiles or cities OSM couldn't geocode.
+function isNearby(me: CompleteProfile, other: CompleteProfile): boolean {
+  if (me.latitude !== null && me.longitude !== null && other.latitude !== null && other.longitude !== null) {
+    return haversineDistanceKm(me.latitude, me.longitude, other.latitude, other.longitude) <= MAX_DISTANCE_KM;
+  }
+  return me.city.trim().toLowerCase() === other.city.trim().toLowerCase();
+}
+
+// Someone who already has a room is offering a spot in it, so they only make
+// sense paired with someone still searching. Two "needs a room" people can
+// match to go look together; two "has a room" people have nothing to offer
+// each other.
+function listingTypeCompatible(me: CompleteProfile, other: CompleteProfile): boolean {
+  return me.listingType !== "HAS_ROOM" || other.listingType !== "HAS_ROOM";
+}
+
 // Roommates need to actually be able to live together in the same place —
 // these aren't "nice to have" match signals, they gate whether a profile
 // is shown at all.
-export function passesHardFilters(me: Profile, other: Profile): boolean {
-  if (me.city.trim().toLowerCase() !== other.city.trim().toLowerCase()) {
+export function passesHardFilters(me: CompleteProfile, other: CompleteProfile): boolean {
+  if (!isNearby(me, other)) {
+    return false;
+  }
+  if (!listingTypeCompatible(me, other)) {
     return false;
   }
   const meAccepts =
@@ -51,7 +119,7 @@ function jaccard(a: string[], b: string[]): number {
   return union.size === 0 ? 0.5 : intersection.length / union.size;
 }
 
-function budgetScore(me: Profile, other: Profile): number {
+function budgetScore(me: CompleteProfile, other: CompleteProfile): number {
   const overlap =
     Math.min(me.budgetMax, other.budgetMax) -
     Math.max(me.budgetMin, other.budgetMin);
@@ -70,7 +138,7 @@ const FOOD_GROUP: Record<string, string> = {
   NON_VEG: "mixed",
 };
 
-function sleepScore(me: Profile, other: Profile): number {
+function sleepScore(me: CompleteProfile, other: CompleteProfile): number {
   if (me.sleepSchedule === other.sleepSchedule) return 1;
   if (me.sleepSchedule === "FLEXIBLE" || other.sleepSchedule === "FLEXIBLE") {
     return 0.85;
@@ -78,14 +146,14 @@ function sleepScore(me: Profile, other: Profile): number {
   return 0.2; // EARLY_BIRD vs NIGHT_OWL
 }
 
-function foodScore(me: Profile, other: Profile): number {
+function foodScore(me: CompleteProfile, other: CompleteProfile): number {
   if (me.foodPreference === other.foodPreference) return 1;
   return FOOD_GROUP[me.foodPreference] === FOOD_GROUP[other.foodPreference]
     ? 0.7
     : 0.3;
 }
 
-function areaScore(me: Profile, other: Profile): number {
+function areaScore(me: CompleteProfile, other: CompleteProfile): number {
   if (!me.preferredArea || !other.preferredArea) return 0.6;
   return me.preferredArea.trim().toLowerCase() ===
     other.preferredArea.trim().toLowerCase()
@@ -94,8 +162,8 @@ function areaScore(me: Profile, other: Profile): number {
 }
 
 export function computeCompatibility(
-  me: Profile,
-  other: Profile
+  me: CompleteProfile,
+  other: CompleteProfile
 ): CompatibilityResult {
   const factors: CompatibilityFactor[] = [
     {
@@ -199,4 +267,17 @@ export function computeCompatibility(
   const score = Math.round((weightedScore / totalWeight) * 100);
 
   return { score, breakdown: factors.sort((a, b) => b.weight - a.weight) };
+}
+
+// Combines each team member's individual compatibility with the viewer into
+// one result, by averaging the score and each same-position factor. Relies
+// on computeCompatibility always producing factors in the same order (the
+// sort key is a fixed weight, not a score), so positional averaging is safe.
+export function averageCompatibility(results: CompatibilityResult[]): CompatibilityResult {
+  const score = Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length);
+  const breakdown = results[0].breakdown.map((factor, i) => ({
+    ...factor,
+    score: results.reduce((sum, r) => sum + r.breakdown[i].score, 0) / results.length,
+  }));
+  return { score, breakdown };
 }
