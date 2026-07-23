@@ -409,7 +409,16 @@ export default function ProfileSetupPage() {
         </div>
       </div>
 
-      <form id="profile-setup-form" onSubmit={handleSubmit} className="mt-8">
+      <form
+        id="profile-setup-form"
+        onSubmit={handleSubmit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
+            event.preventDefault();
+          }
+        }}
+        className="mt-8"
+      >
         <Card className="overflow-hidden border-border/80 shadow-xl shadow-black/5">
           <div className="border-b border-border/80 bg-gradient-to-br from-primary/10 via-card to-card px-6 py-6 sm:px-8">
             <div className="flex items-start gap-4">

@@ -13,21 +13,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { email, password } = parsed.data;
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
+  try {
+    const { email, password } = parsed.data;
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return NextResponse.json(
+        { error: "An account with this email already exists" },
+        { status: 409 }
+      );
+    }
+
+    const passwordHash = await hashPassword(password);
+    const user = await prisma.user.create({
+      data: { email, passwordHash },
+    });
+
+    await setSessionCookie(user.id);
+
+    return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
+  } catch (error) {
+    console.error("Registration failed:", error);
     return NextResponse.json(
-      { error: "An account with this email already exists" },
-      { status: 409 }
+      { error: "Account creation is unavailable. Check the PostgreSQL database setup." },
+      { status: 503 }
     );
   }
-
-  const passwordHash = await hashPassword(password);
-  const user = await prisma.user.create({
-    data: { email, passwordHash },
-  });
-
-  await setSessionCookie(user.id);
-
-  return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
 }

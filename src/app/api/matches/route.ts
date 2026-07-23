@@ -11,10 +11,17 @@ export async function GET() {
 
   const matches = await prisma.match.findMany({
     where: {
-      OR: [
-        { userAId: userId },
-        { userBId: userId },
-        { team: { members: { some: { userId } } } },
+      AND: [
+        {
+          OR: [
+            { userAId: userId },
+            { userBId: userId },
+            { team: { members: { some: { userId } } } },
+          ],
+        },
+        {
+          OR: [{ userBId: { not: null } }, { teamId: { not: null } }],
+        },
       ],
     },
     orderBy: { createdAt: "desc" },

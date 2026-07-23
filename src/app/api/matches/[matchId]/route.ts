@@ -73,7 +73,10 @@ export async function GET(
     }
     isGroup = match.team.members.length + 1 > 2;
   } else {
-    const other = match.userAId === userId ? match.userB! : match.userA;
+    const other = match.userAId === userId ? match.userB : match.userA;
+    if (!other) {
+      return NextResponse.json({ error: "Match is no longer available" }, { status: 404 });
+    }
     participants = [{ id: other.id, name: other.profile?.name ?? "Unknown", photoUrl: other.photos[0]?.url ?? null }];
     headerName = other.profile?.name ?? "Unknown";
     headerPhotoUrl = other.photos[0]?.url ?? null;
