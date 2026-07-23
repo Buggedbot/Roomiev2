@@ -23,7 +23,9 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({
+        error: "The server could not process your request. Please check the database setup.",
+      }));
       if (!res.ok) {
         setError(data.error ?? "Something went wrong");
         return;

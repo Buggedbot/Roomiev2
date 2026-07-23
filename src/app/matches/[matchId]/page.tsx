@@ -29,6 +29,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
+  const [matchError, setMatchError] = useState<string | null>(null);
   const [typingName, setTypingName] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,8 +59,13 @@ export default function ChatPage() {
 
   useEffect(() => {
     fetch(`/api/matches/${matchId}`)
-      .then((res) => res.json())
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Unable to load this match");
+        return data;
+      })
       .then((data) => {
+        setMatchError(null);
         setHeader({
           name: data.headerName ?? "Roomie",
           photoUrl: data.headerPhotoUrl ?? null,
@@ -68,6 +74,9 @@ export default function ChatPage() {
         setParticipants(
           new Map((data.participants ?? []).map((p: { id: string; name: string }) => [p.id, p.name]))
         );
+      })
+      .catch((error: Error) => {
+        setMatchError(error.message);
       });
   }, [matchId]);
 
@@ -230,6 +239,8 @@ export default function ChatPage() {
           {typingName && <p className="text-xs text-primary">{typingName} typing…</p>}
         </div>
       </div>
+
+      {matchError && <p className="py-6 text-sm text-red-500">{matchError}</p>}
 
       <div className="flex-1 space-y-3 overflow-y-auto py-4">
         {loading && <p className="text-sm text-muted">Loading messages…</p>}
